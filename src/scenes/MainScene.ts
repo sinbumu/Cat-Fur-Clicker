@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GameState } from '../GameState';
+import { ShopUI } from '../ui/ShopUI';
 
 export default class MainScene extends Phaser.Scene {
   private furText!: Phaser.GameObjects.Text;
@@ -29,6 +30,12 @@ export default class MainScene extends Phaser.Scene {
       fontSize: '16px',
       color: '#aaaaaa'
     });
+
+    // Shop UI
+    // Place shop on the right side
+    // Card width 280. Center at 0,0 relative to container.
+    // So container at width - 150 gives margin.
+    new ShopUI(this, width - 150, 100);
 
     // Update UI immediately
     this.updateUI();

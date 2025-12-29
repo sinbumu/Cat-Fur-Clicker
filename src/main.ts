@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import MainScene from './scenes/MainScene';
-import './style.css'; // Assuming style.css exists from scaffolding, or I should verify/create it.
+import './style.css';
+import WebFont from 'webfontloader';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   width: 800,
   height: 600,
-  parent: 'app', // Matches the ID in index.html (usually 'app' for Vite templates)
+  parent: 'app',
   backgroundColor: '#2d2d2d',
   scene: [MainScene],
   scale: {
@@ -15,4 +16,16 @@ const config: Phaser.Types.Core.GameConfig = {
   }
 };
 
-new Phaser.Game(config);
+WebFont.load({
+  google: {
+    families: ['Noto Sans KR']
+  },
+  active: () => {
+    new Phaser.Game(config);
+  },
+  inactive: () => {
+    // Fallback if font fails to load, still start the game
+    console.warn('Font loading failed, starting game anyway');
+    new Phaser.Game(config);
+  }
+});
