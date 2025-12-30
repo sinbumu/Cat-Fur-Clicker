@@ -40,6 +40,7 @@ export interface GameStateData {
   critMult: number;
   upgrades: { [id: string]: number }; // id -> level
   lastSaveTime?: number;
+  soundEnabled: boolean;
 }
 
 interface SavedData {
@@ -47,6 +48,7 @@ interface SavedData {
   totalFurEarned: number;
   upgrades: { [id: string]: number };
   lastSaveTime: number;
+  soundEnabled?: boolean;
 }
 
 const SAVE_KEY = 'dust_bunny_save_v1';
@@ -71,7 +73,8 @@ export class GameState {
       globalMult: 1,
       critChance: 0.05,
       critMult: 10,
-      upgrades: {}
+      upgrades: {},
+      soundEnabled: true
     };
 
     // Initialize upgrade levels to 0
@@ -96,6 +99,16 @@ export class GameState {
   public notifyListeners() {
     this.listeners.forEach(cb => cb(this.data));
     this.triggerSave();
+  }
+
+  public toggleSound() {
+    this.data.soundEnabled = !this.data.soundEnabled;
+    this.notifyListeners();
+  }
+
+  public resetSave() {
+    localStorage.removeItem(SAVE_KEY);
+    window.location.reload();
   }
 
   public handleAutoProduction(deltaTimeSeconds: number) {
@@ -172,7 +185,8 @@ export class GameState {
         fur: this.data.fur,
         totalFurEarned: this.data.totalFurEarned,
         upgrades: this.data.upgrades,
-        lastSaveTime: Date.now()
+        lastSaveTime: Date.now(),
+        soundEnabled: this.data.soundEnabled
     };
     try {
         localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
@@ -190,6 +204,7 @@ export class GameState {
             // Restore basic stats
             this.data.fur = saved.fur || 0;
             this.data.totalFurEarned = saved.totalFurEarned || 0;
+            this.data.soundEnabled = saved.soundEnabled !== undefined ? saved.soundEnabled : true;
 
             // Restore upgrades
             // Merge with current balance structure in case new upgrades were added

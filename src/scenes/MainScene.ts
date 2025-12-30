@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import { GameState } from '../GameState';
 import { ShopUI } from '../ui/ShopUI';
+import { SettingsUI } from '../ui/SettingsUI';
 
 export default class MainScene extends Phaser.Scene {
   private furText!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
+  private clickParticles!: Phaser.GameObjects.Particles.ParticleEmitter;
 
   constructor() {
     super('MainScene');
@@ -30,6 +32,9 @@ export default class MainScene extends Phaser.Scene {
       fontSize: '16px',
       color: '#aaaaaa'
     });
+
+    // Settings UI
+    new SettingsUI(this, 30, height - 30);
 
     // Shop UI
     // Place shop on the right side
@@ -57,7 +62,25 @@ export default class MainScene extends Phaser.Scene {
     const radius = 50;
     const color = 0xcccccc; // Light gray
 
-    // Using a Circle Game Object might be simpler for "placeholder" clickability
+    // Particle Emitter for burst
+    this.clickParticles = this.add.particles(0, 0, 'dummy', {
+        speed: { min: 50, max: 150 },
+        scale: { start: 0.5, end: 0 },
+        alpha: { start: 1, end: 0 },
+        lifespan: 500,
+        gravityY: 200,
+        emitting: false
+    });
+
+    // Create a texture for particles on the fly if needed,
+    // but Phaser particles can run without texture (renders square) or we create a small circle texture
+    const graphics = this.make.graphics({ x: 0, y: 0 }, false);
+    graphics.fillStyle(0xffffff);
+    graphics.fillCircle(5, 5, 5);
+    graphics.generateTexture('particle', 10, 10);
+    this.clickParticles.setTexture('particle');
+
+    // Main Furball
     const circle = this.add.circle(width / 2, height / 2, radius, color);
     circle.setInteractive();
 
@@ -75,16 +98,42 @@ export default class MainScene extends Phaser.Scene {
     circle.on('pointerdown', () => {
       const { gain, isCrit } = gameState.handleClick();
 
-      // Visual feedback
+      // 1. Squish tween (enhanced)
+      // Stop previous tween to avoid conflict
+      this.tweens.killTweensOf([circle, fluff]);
+      // Reset scale
+      circle.setScale(1);
+      fluff.setScale(1);
+
       this.tweens.add({
         targets: [circle, fluff],
-        scale: 0.9,
+        scaleX: 1.2,
+        scaleY: 0.8,
         duration: 50,
         yoyo: true,
+        ease: 'Quad.easeInOut'
       });
 
-      // Floating text for gain
-      this.showFloatingText(width / 2, height / 2 - 60, `+${Math.floor(gain)}` + (isCrit ? ' CRIT!' : ''), isCrit ? '#ff0000' : '#ffffff');
+      // 2. Particle Burst
+      this.clickParticles.emitParticleAt(width / 2, height / 2, 10);
+
+      // 3. Floating text
+      this.showFloatingText(
+          width / 2,
+          height / 2 - 60,
+          isCrit ? `+${Math.floor(gain)}\nCRIT!` : `+${Math.floor(gain)}`,
+          isCrit
+      );
+
+      // 4. Sound Placeholder
+      if (gameState.data.soundEnabled) {
+          // console.log("Play Sound");
+      }
+
+      // 5. Screen Shake on Crit
+      if (isCrit) {
+          this.cameras.main.shake(100, 0.005);
+      }
     });
 
     // Add text to indicate it's clickable
@@ -110,20 +159,24 @@ export default class MainScene extends Phaser.Scene {
     );
   }
 
-  showFloatingText(x: number, y: number, message: string, color: string) {
+  showFloatingText(x: number, y: number, message: string, isCrit: boolean) {
     const text = this.add.text(x, y, message, {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: color,
+      fontFamily: '"Noto Sans KR", Arial',
+      fontSize: isCrit ? '32px' : '24px',
+      color: isCrit ? '#ff0000' : '#ffffff',
       stroke: '#000000',
-      strokeThickness: 2
+      strokeThickness: isCrit ? 4 : 2,
+      align: 'center',
+      fontStyle: isCrit ? 'bold' : 'normal'
     }).setOrigin(0.5);
 
     this.tweens.add({
       targets: text,
-      y: y - 50,
+      y: y - (isCrit ? 100 : 50),
       alpha: 0,
-      duration: 1000,
+      scale: isCrit ? 1.5 : 1,
+      duration: isCrit ? 1000 : 800,
+      ease: 'Back.out',
       onComplete: () => text.destroy()
     });
   }
