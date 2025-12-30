@@ -5,6 +5,7 @@ Node 20 LTS 기준으로 진행
 PR에 How to run, How to build를 포함하고 npm run build가 성공해야 함
 밸런스 JSON은 이미 존재하며(src\config\balance.demo_10min_v1.json), 절대 하드코딩하지 말고 로드해서 사용
 업그레이드/상태 저장 키 이름 규칙
+
 1) Game State & Logic Specifications
    - State Variables:
      - fur (Start: 0)
@@ -14,6 +15,7 @@ PR에 How to run, How to build를 포함하고 npm run build가 성공해야 함
      - globalMult (Start: 1)
      - critChance (Start: 0.05)
      - critMult (Start: 10)
+     - soundEnabled (Start: true, Persisted)
    - Mechanics:
      - Auto-production: fur += fps * deltaTime * globalMult
      - Click:
@@ -37,10 +39,23 @@ PR에 How to run, How to build를 포함하고 npm run build가 성공해야 함
 
 3) Persistence & Offline Progress
    - Storage: localStorage (Key: 'dust_bunny_save_v1')
-   - Data: fur, totalFurEarned, upgrades (levels), lastSaveTime
+   - Data: fur, totalFurEarned, upgrades (levels), lastSaveTime, soundEnabled
    - Auto-save: Every 2-5 seconds (Debounced/Throttled).
    - Offline Reward:
      - Allowed (Max 1 hour / 3600s).
      - Calculation: offlineSeconds = min(now - lastSaveTime, 3600)
      - Gain = fps * offlineSeconds * globalMult
      - Display: Toast notification on load.
+
+4) Polish & Settings (Juiciness)
+   - Visual Feedback (No external assets):
+     - Squish tween on click.
+     - Particle burst (dots/fluff) on click.
+     - Floating text: `+gain` (White), `CRIT!` (Red/Big).
+     - Screen shake on Critical Hit (weak).
+   - Settings UI:
+     - Toggle Sound (updates state, no-op if no audio assets yet).
+     - Reset Save: Button -> Confirmation -> Clear Storage -> Reload.
+   - Deployment:
+     - `vite.config.ts` must use relative base (`./`) for GitHub Pages compatibility.
+     - README must include specific GitHub Pages deployment instructions.
