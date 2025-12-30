@@ -39,7 +39,17 @@ export interface GameStateData {
   critChance: number;
   critMult: number;
   upgrades: { [id: string]: number }; // id -> level
+  lastSaveTime?: number;
 }
+
+interface SavedData {
+  fur: number;
+  totalFurEarned: number;
+  upgrades: { [id: string]: number };
+  lastSaveTime: number;
+}
+
+const SAVE_KEY = 'dust_bunny_save_v1';
 
 export class GameState {
   private static instance: GameState;
@@ -47,6 +57,9 @@ export class GameState {
   public data: GameStateData;
   public balance: BalanceData;
   private listeners: Function[] = [];
+
+  public offlineEarnings: number = 0;
+  private saveTimeout: any;
 
   private constructor() {
     this.balance = balanceData;
@@ -66,7 +79,7 @@ export class GameState {
       this.data.upgrades[u.id] = 0;
     });
 
-    this.recalculateStats();
+    this.load();
   }
 
   public static getInstance(): GameState {
@@ -82,17 +95,15 @@ export class GameState {
 
   public notifyListeners() {
     this.listeners.forEach(cb => cb(this.data));
+    this.triggerSave();
   }
 
   public handleAutoProduction(deltaTimeSeconds: number) {
-    // Recalculate stats first? No, stats only change on upgrade.
-    // However, fps might depend on something dynamic? No, it's level based.
-
     if (this.data.fps > 0) {
       const gain = this.data.fps * deltaTimeSeconds * this.data.globalMult;
       this.data.fur += gain;
       this.data.totalFurEarned += gain;
-      this.notifyListeners();
+      this.notifyListeners(); // Will trigger save debounce
     }
   }
 
@@ -106,12 +117,6 @@ export class GameState {
 
     this.data.fur += gain;
     this.data.totalFurEarned += gain;
-
-    // Unlocks might happen due to totalFurEarned increase
-    // We can check strictly on UI or check here.
-    // But since UI needs to know about unlock status, maybe we don't store "isUnlocked" in state,
-    // but derive it from totalFurEarned in the UI or a helper.
-
     this.notifyListeners();
 
     return { gain, isCrit };
@@ -154,18 +159,74 @@ export class GameState {
     this.notifyListeners();
   }
 
+  private triggerSave() {
+    if (this.saveTimeout) return;
+    this.saveTimeout = setTimeout(() => {
+        this.save();
+        this.saveTimeout = null;
+    }, 2000); // 2 seconds debounce
+  }
+
+  private save() {
+    const saveData: SavedData = {
+        fur: this.data.fur,
+        totalFurEarned: this.data.totalFurEarned,
+        upgrades: this.data.upgrades,
+        lastSaveTime: Date.now()
+    };
+    try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+    } catch (e) {
+        console.error('Failed to save game', e);
+    }
+  }
+
+  private load() {
+    try {
+        const json = localStorage.getItem(SAVE_KEY);
+        if (json) {
+            const saved: SavedData = JSON.parse(json);
+
+            // Restore basic stats
+            this.data.fur = saved.fur || 0;
+            this.data.totalFurEarned = saved.totalFurEarned || 0;
+
+            // Restore upgrades
+            // Merge with current balance structure in case new upgrades were added
+            this.balance.upgrades.forEach(u => {
+                if (saved.upgrades && saved.upgrades[u.id] !== undefined) {
+                    this.data.upgrades[u.id] = saved.upgrades[u.id];
+                }
+            });
+
+            this.recalculateStats();
+
+            // Calculate offline earnings
+            if (saved.lastSaveTime) {
+                const now = Date.now();
+                const diffSeconds = (now - saved.lastSaveTime) / 1000;
+
+                // Cap at 1 hour (3600 seconds)
+                const offlineSeconds = Math.min(diffSeconds, 3600);
+
+                if (offlineSeconds > 0 && this.data.fps > 0) {
+                    const gain = this.data.fps * offlineSeconds * this.data.globalMult;
+                    this.offlineEarnings = gain;
+                    this.data.fur += gain;
+                    this.data.totalFurEarned += gain;
+                }
+            }
+        } else {
+            // First run, recalculate default stats
+            this.recalculateStats();
+        }
+    } catch (e) {
+        console.error('Failed to load game', e);
+        this.recalculateStats();
+    }
+  }
+
   private recalculateStats() {
-    // Reset to defaults
-    // Note: If base values are not 0, we need to be careful.
-    // The prompt says:
-    // A: fpc = 1 + level(A)*1
-    // B: fps = level(B)*0.2
-    // C: globalMult = 1 + level(C)*0.02
-    // D: critChance = 0.05 + level(D)*0.005
-
-    // Let's implement generic logic based on JSON effect types where possible,
-    // but fallback to prompt formulas if JSON is ambiguous or as per instruction "JSON 우선".
-
     let fpc = 1;
     let fps = 0;
     let globalMult = 1;
@@ -178,33 +239,19 @@ export class GameState {
 
         if (effect.type === 'add') {
              if (effect.stat === 'FPC') {
-                 // JSON: perLevel: 1. Prompt: 1 + level*1.
-                 // So we add level * perLevel to base.
                  fpc += level * (effect.perLevel || 0);
              } else if (effect.stat === 'FPS') {
                  fps += level * (effect.perLevel || 0);
              } else if (effect.stat === 'critChance') {
-                 // JSON has "base": 0.05.
-                 // We should probably start with that base if it's the only source?
-                 // But wait, we initialized defaults above.
-                 // Let's treat "base" in effect as "starting value override" or just ignore if we hardcoded defaults.
-                 // Prompt says: critChance = 0.05 + level * 0.005
                  critChance += level * (effect.perLevel || 0);
              }
         } else if (effect.type === 'add_multiplier') {
             if (effect.stat === 'globalMult') {
-                // Prompt: 1 + level * 0.02
                 globalMult += level * (effect.perLevel || 0);
             }
         }
 
-        // Special case for 'D' which defines critMult in the root of the upgrade object?
         if (u.id === 'D' && u.critMult) {
-             // The prompt says "critMult=10" default.
-             // Does leveling D change critMult?
-             // JSON has "critMult": 10 at top level of upgrade D.
-             // It doesn't seem to scale with level in the prompt description, just part of the upgrade definition.
-             // Maybe it overrides the default? It matches the default.
              critMult = u.critMult;
         }
     });

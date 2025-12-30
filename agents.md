@@ -34,3 +34,13 @@ PR에 How to run, How to build를 포함하고 npm run build가 성공해야 함
      - Auto-generated from JSON 'upgrades' list.
      - Cards display: Name, Level, Cost, Effect, Buy Button.
      - Visual feedback for locked items and affordability.
+
+3) Persistence & Offline Progress
+   - Storage: localStorage (Key: 'dust_bunny_save_v1')
+   - Data: fur, totalFurEarned, upgrades (levels), lastSaveTime
+   - Auto-save: Every 2-5 seconds (Debounced/Throttled).
+   - Offline Reward:
+     - Allowed (Max 1 hour / 3600s).
+     - Calculation: offlineSeconds = min(now - lastSaveTime, 3600)
+     - Gain = fps * offlineSeconds * globalMult
+     - Display: Toast notification on load.

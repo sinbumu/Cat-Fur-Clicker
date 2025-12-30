@@ -40,6 +40,13 @@ export default class MainScene extends Phaser.Scene {
     // Update UI immediately
     this.updateUI();
 
+    // Check for offline earnings
+    if (gameState.offlineEarnings > 0) {
+        this.showToast(`Welcome back!\nYou earned ${Math.floor(gameState.offlineEarnings)} Fur while offline.`);
+        // Reset so we don't show it again on scene restart if any
+        gameState.offlineEarnings = 0;
+    }
+
     // Subscribe to state changes
     gameState.addListener(() => {
         // We can update UI here or in update loop.
@@ -118,6 +125,32 @@ export default class MainScene extends Phaser.Scene {
       alpha: 0,
       duration: 1000,
       onComplete: () => text.destroy()
+    });
+  }
+
+  showToast(message: string) {
+    const { width, height } = this.scale;
+
+    const container = this.add.container(width / 2, height - 100);
+
+    const bg = this.add.rectangle(0, 0, 400, 80, 0x000000, 0.8);
+    bg.setStrokeStyle(2, 0xffffff);
+
+    const text = this.add.text(0, 0, message, {
+      fontFamily: '"Noto Sans KR", Arial',
+      fontSize: '18px',
+      color: '#ffffff',
+      align: 'center'
+    }).setOrigin(0.5);
+
+    container.add([bg, text]);
+
+    this.tweens.add({
+      targets: container,
+      alpha: 0,
+      delay: 4000,
+      duration: 1000,
+      onComplete: () => container.destroy()
     });
   }
 }
